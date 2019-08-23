@@ -1,0 +1,36 @@
+{
+  "vpc-provider:account=449435941126:filter.vpc-id=vpc-1362e468:region=us-east-1": {
+    "vpcId": "vpc-1362e468",
+    "availabilityZones": [
+      "us-east-1c",
+      "us-east-1d",
+      "us-east-1e"
+    ],
+    "privateSubnetIds": [
+      "subnet-5ab44c10",
+      "subnet-92182ccf",
+      "subnet-c49ebefb"
+    ],
+    "privateSubnetNames": [
+      "Private"
+    ],
+    "privateSubnetRouteTableIds": [
+      "rtb-0093237c",
+      "rtb-0093237c",
+      "rtb-0093237c"
+    ],
+    "publicSubnetIds": [
+      "subnet-74a35b3e",
+      "subnet-9e2f1bc3",
+      "subnet-609fbf5f"
+    ],
+    "publicSubnetNames": [
+      "Public"
+    ],
+    "publicSubnetRouteTableIds": [
+      "rtb-f0aa1a8c",
+      "rtb-f0aa1a8c",
+      "rtb-f0aa1a8c"
+    ]
+  }
+}
