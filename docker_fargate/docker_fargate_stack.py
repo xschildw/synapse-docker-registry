@@ -12,8 +12,12 @@ from aws_cdk import (Stack,
     aws_wafv2 as wafv2,
     aws_events as events,
     aws_events_targets as targets,
+    aws_cloudwatch as cloudwatch,
+    aws_cloudwatch_actions as cw_actions,
+    aws_sns as sns,
     CfnOutput,
     Duration,
+    Fn,
     SecretValue,
     Tags)
 
@@ -269,6 +273,48 @@ class DockerFargateStack(Stack):
         scalable_target.scale_on_memory_utilization("MemoryScaling",
             target_utilization_percent=50
         )
+
+        # Notifications go to the shared topic exported by the Synapse global-resources stack.
+        alarm_topic = sns.Topic.from_topic_arn(self, "NotificationTopic",
+            Fn.import_value(f'{region}-synapse-{context}-global-resources-NotificationTopic'))
+        target_group_metrics = load_balanced_fargate_service.target_group.metrics
+
+        # Alarm when the ALB sees an unhealthy target for 15 minutes straight,
+        # i.e. longer than ECS normally takes to replace a failed task.
+        # 'Maximum' so that any unhealthy target within a period counts.
+        unhealthy_host_alarm = cloudwatch.Alarm(self, "UnhealthyHostAlarm",
+            alarm_description="Docker registry ALB has had at least one unhealthy target for 15 minutes",
+            metric=target_group_metrics.unhealthy_host_count(
+                period=Duration.minutes(5),
+                statistic=cloudwatch.Stats.MAXIMUM,
+            ),
+            threshold=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            evaluation_periods=3,
+            datapoints_to_alarm=3,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        unhealthy_host_alarm.add_alarm_action(cw_actions.SnsAction(alarm_topic))
+        unhealthy_host_alarm.add_ok_action(cw_actions.SnsAction(alarm_topic))
+
+        # Alarm quickly on a full outage (no healthy targets). Crash-looping tasks
+        # get deregistered, so the unhealthy count alone can't be relied on here.
+        # Missing data is breaching since the ALB may stop reporting when no
+        # targets are registered.
+        no_healthy_host_alarm = cloudwatch.Alarm(self, "NoHealthyHostAlarm",
+            alarm_description="Docker registry ALB has had no healthy targets for 3 minutes",
+            metric=target_group_metrics.healthy_host_count(
+                period=Duration.minutes(1),
+                statistic=cloudwatch.Stats.MINIMUM,
+            ),
+            threshold=1,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+            evaluation_periods=3,
+            datapoints_to_alarm=3,
+            treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
+        )
+        no_healthy_host_alarm.add_alarm_action(cw_actions.SnsAction(alarm_topic))
+        no_healthy_host_alarm.add_ok_action(cw_actions.SnsAction(alarm_topic))
 
         # ── Credential rotation ──────────────────────────────────────────────
         # SSM parameter used to hand the old key ID from the rotation Lambda to
