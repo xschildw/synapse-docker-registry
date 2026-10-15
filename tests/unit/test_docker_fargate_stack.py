@@ -57,3 +57,20 @@ def test_no_healthy_host_alarm_created():
         "AlarmActions": NOTIFICATION_TOPIC,
         "OKActions": NOTIFICATION_TOPIC,
     })
+
+def test_target_response_time_alarm_created():
+    template = synth_template()
+
+    template.has_resource_properties("AWS::CloudWatch::Alarm", {
+        "MetricName": "TargetResponseTime",
+        "Namespace": "AWS/ApplicationELB",
+        "ExtendedStatistic": "p99",
+        "Period": 300,
+        "Threshold": 300,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 3,
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": NOTIFICATION_TOPIC,
+        "OKActions": NOTIFICATION_TOPIC,
+    })

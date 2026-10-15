@@ -316,6 +316,26 @@ class DockerFargateStack(Stack):
         no_healthy_host_alarm.add_alarm_action(cw_actions.SnsAction(alarm_topic))
         no_healthy_host_alarm.add_ok_action(cw_actions.SnsAction(alarm_topic))
 
+        # Latency alarm required by a security audit. Blob uploads stream through
+        # the registry, so pushes of large layers routinely take minutes and
+        # dominate any average; p99 stayed under 5 minutes except for isolated
+        # spikes, which can't fill 3 consecutive periods. Note that a hung
+        # target shows up as ALB 504s (60s idle timeout), not as response time.
+        response_time_alarm = cloudwatch.Alarm(self, "TargetResponseTimeAlarm",
+            alarm_description="Docker registry p99 target response time has exceeded 5 minutes for 15 minutes",
+            metric=target_group_metrics.target_response_time(
+                period=Duration.minutes(5),
+                statistic=cloudwatch.Stats.p(99),
+            ),
+            threshold=Duration.minutes(5).to_seconds(),
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            evaluation_periods=3,
+            datapoints_to_alarm=3,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        response_time_alarm.add_alarm_action(cw_actions.SnsAction(alarm_topic))
+        response_time_alarm.add_ok_action(cw_actions.SnsAction(alarm_topic))
+
         # ── Credential rotation ──────────────────────────────────────────────
         # SSM parameter used to hand the old key ID from the rotation Lambda to
         # the cleanup Lambda (which runs only after ECS confirms the new tasks
